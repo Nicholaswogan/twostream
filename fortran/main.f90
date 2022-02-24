@@ -1,15 +1,14 @@
 program main
-  use twostream, only: two_stream
+  use twostream, only: two_stream, dp
   implicit none
-  integer,parameter :: real_kind = kind(1.0d0)
   integer, parameter :: nz = 200
-  real(real_kind) :: tau(nz)
-  real(real_kind) :: w0(nz), u0, Rsfc, amean(nz+1), surface_radiance
+  real(dp) :: tau(nz)
+  real(dp) :: w0(nz), u0, Rsfc, amean(nz+1), surface_radiance
   integer :: ierr, i, nt
   real :: end, start
 
-  u0 = 0.6427876096865394d0
-  Rsfc = 0.25d0
+  u0 = 0.6427876096865394_dp
+  Rsfc = 0.25_dp
   
   open(2,file='tau_and_w0.txt',status='old')
   do i = 1,nz

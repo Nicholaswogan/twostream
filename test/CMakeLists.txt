@@ -1,0 +1,7 @@
+add_library(test_utils test_utils.f90)
+
+add_executable(benchmark_twostream benchmark_twostream.f90)
+target_link_libraries(benchmark_twostream twostream test_utils)
+
+add_executable(test_twostream test_twostream.f90)
+target_link_libraries(test_twostream twostream test_utils)

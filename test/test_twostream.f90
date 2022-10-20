@@ -17,7 +17,6 @@ contains
     call two_stream_solar(d%nz, d%tau, d%w0, d%gt, d%u0, d%Rsfc, d%amean, d%surface_radiance, d%fup, d%fdn, wrk)
     print*,'test_twostream_noalloc:'
     print*,'amean(1) = ',d%amean(1)
-    print*,''
   end subroutine
 
   subroutine test_twostream_alloc()

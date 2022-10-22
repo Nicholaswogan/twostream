@@ -3,11 +3,11 @@ program benchmark_twostream
   use test_utils, only: TwostreamTestData
   implicit none
 
-  call benchmark_twostream_noalloc()
-  call benchmark_twostream_alloc()
+  call benchmark_twostream_solar_noalloc()
+  call benchmark_twostream_solar_alloc()
 
 contains
-  subroutine benchmark_twostream_noalloc()
+  subroutine benchmark_twostream_solar_noalloc()
     type(TwostreamTestData) :: d
     type(TwoStreamSolarWrk) :: wrk
 
@@ -24,12 +24,12 @@ contains
     enddo
     call cpu_time(t(2))
 
-    print*,'benchmark_twostream_noalloc'
-    print*,'amean(1) = ',d%amean(1)
+    print*,'benchmark_twostream_solar_noalloc'
+    print*,'fup(1) = ',d%fup(1)
     print*,'Time / run = ',(t(2)-t(1))/real(nt,dp),'seconds'
   end subroutine
 
-  subroutine benchmark_twostream_alloc()
+  subroutine benchmark_twostream_solar_alloc()
     type(TwostreamTestData) :: d
 
     integer, parameter :: nt = 100000
@@ -44,8 +44,8 @@ contains
     enddo
     call cpu_time(t(2))
 
-    print*,'benchmark_twostream_alloc'
-    print*,'amean(1) = ',d%amean(1)
+    print*,'benchmark_twostream_solar_alloc'
+    print*,'fup(1) = ',d%fup(1)
     print*,'Time / run = ',(t(2)-t(1))/real(nt,dp),'seconds'
   end subroutine
 

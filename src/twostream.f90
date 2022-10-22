@@ -6,7 +6,7 @@ module twostream
 
   public :: dp
   public :: two_stream_solar, TwoStreamSolarWrk
-  public :: two_stream_ir
+  public :: two_stream_ir, TwoStreamIRWrk
 
   type :: TwoStreamSolarWrk
     real(dp), allocatable :: gam1(:), gam2(:), gam3(:), gam4(:)
@@ -19,6 +19,18 @@ module twostream
   end type
   interface TwoStreamSolarWrk
     procedure :: TwoStreamSolarWrk_create
+  end interface
+
+  type :: TwoStreamIRWrk
+    real(dp), allocatable :: gam1(:), gam2(:)
+    real(dp), allocatable :: lambda(:), cap_gam(:)
+    real(dp), allocatable :: e1(:), e2(:), e3(:), e4(:)
+    real(dp), allocatable :: cp0(:), cpb(:), cm0(:), cmb(:)
+    real(dp), allocatable :: A(:), B(:), D(:), E(:)
+    real(dp), allocatable :: y1(:), y2(:)
+  end type
+  interface TwoStreamIRWrk
+    procedure :: TwoStreamIRWrk_create
   end interface
 
 contains
@@ -207,7 +219,7 @@ contains
   end subroutine
   
   subroutine two_stream_ir(nz, tau, w0, gt, Rsfc, bplanck, &
-                           fup, fdn)
+                           fup, fdn, wrk)
     integer, intent(in) :: nz
     real(dp), intent(in) :: tau(nz)
     real(dp), intent(in) :: w0(nz)
@@ -215,14 +227,18 @@ contains
     real(dp), intent(in) :: Rsfc
     real(dp), intent(in) :: bplanck(nz+1)
     real(dp), intent(out) :: fup(nz+1), fdn(nz+1)
+    type(TwoStreamIRWrk), optional, target, intent(inout) :: wrk
     
     ! local
-    real(dp) :: gam1(nz), gam2(nz)
-    real(dp) :: lambda(nz), cap_gam(nz)
-    real(dp) :: e1(nz), e2(nz), e3(nz), e4(nz)
-    real(dp) :: cp0(nz), cpb(nz), cm0(nz), cmb(nz)
-    real(dp) :: A(nz*2), B(nz*2), D(nz*2), E(nz*2)
-    real(dp) :: y1(nz), y2(nz)
+    real(dp), pointer :: gam1(:), gam2(:)
+    real(dp), pointer :: lambda(:), cap_gam(:)
+    real(dp), pointer :: e1(:), e2(:), e3(:), e4(:)
+    real(dp), pointer :: cp0(:), cpb(:), cm0(:), cmb(:)
+    real(dp), pointer :: A(:), B(:), D(:), E(:)
+    real(dp), pointer :: y1(:), y2(:)
+    ! pointer
+    type(TwoStreamIRWrk), pointer :: w
+    logical :: deallocate_w
     
     integer :: i, l
     real(dp) :: wrk_real, Ssfc
@@ -232,6 +248,37 @@ contains
     real(dp), parameter :: u1 = 0.5_dp ! (Hemispheric mean)
     real(dp), parameter :: emissivity = 1.0_dp
     real(dp), parameter :: norm = 2.0_dp*pi*u1
+
+    if (present(wrk)) then
+      ! we use memory in wrk
+      w => wrk
+      deallocate_w = .false.
+    else
+      ! we allocate memory for the problem
+      allocate(w)
+      w = TwoStreamIRWrk(nz)
+      deallocate_w = .true.
+    endif
+
+    ! Pointers to work memory
+    gam1 => w%gam1
+    gam2 => w%gam2
+    lambda => w%lambda
+    cap_gam => w%cap_gam
+    e1 => w%e1
+    e2 => w%e2
+    e3 => w%e3
+    e4 => w%e4
+    cp0 => w%cp0
+    cpb => w%cpb
+    cm0 => w%cm0
+    cmb => w%cmb
+    A => w%A
+    B => w%B
+    D => w%D
+    E => w%E
+    y1 => w%y1
+    y2 => w%y2
 
     ! Hemispheric mean Two-Stream coefficients (Table 1)
     gam1 = 2.0_dp - w0*(1.0_dp + gt)
@@ -312,6 +359,10 @@ contains
        fup(i+1) = (y1(i)*e1(i)+y2(i)*e2(i)+cpb(i))
        fdn(i+1) = (y1(i)*e3(i)+y2(i)*e4(i)+cmb(i))
     enddo
+
+    if (deallocate_w) then
+      deallocate(w)
+    endif
     
   end subroutine
   
@@ -352,6 +403,31 @@ contains
     allocate(wrk%e4(nz))
     allocate(wrk%tauc(nz+1))
     allocate(wrk%direct(nz+1))
+    allocate(wrk%cp0(nz))
+    allocate(wrk%cpb(nz))
+    allocate(wrk%cm0(nz))
+    allocate(wrk%cmb(nz))
+    allocate(wrk%A(nz*2))
+    allocate(wrk%B(nz*2))
+    allocate(wrk%D(nz*2))
+    allocate(wrk%E(nz*2))
+    allocate(wrk%y1(nz))
+    allocate(wrk%y2(nz))
+
+  end function
+
+  function TwoStreamIRWrk_create(nz) result(wrk)
+    integer, intent(in) :: nz
+    type(TwoStreamIRWrk) :: wrk
+
+    allocate(wrk%gam1(nz))
+    allocate(wrk%gam2(nz))
+    allocate(wrk%lambda(nz))
+    allocate(wrk%cap_gam(nz))
+    allocate(wrk%e1(nz))
+    allocate(wrk%e2(nz))
+    allocate(wrk%e3(nz))
+    allocate(wrk%e4(nz))
     allocate(wrk%cp0(nz))
     allocate(wrk%cpb(nz))
     allocate(wrk%cm0(nz))

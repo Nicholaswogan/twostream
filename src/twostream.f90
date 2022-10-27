@@ -218,8 +218,6 @@ contains
     type(TwoStreamIRWrk), optional, target, intent(inout) :: wrk
     
     ! local
-    real(dp), pointer :: gam1(:), gam2(:)
-    real(dp), pointer :: lambda(:), cap_gam(:)
     real(dp), pointer :: e1(:), e2(:), e3(:), e4(:)
     real(dp), pointer :: cp0(:), cpb(:), cm0(:), cmb(:)
     real(dp), pointer :: A(:), B(:), D(:), E(:)
@@ -228,7 +226,9 @@ contains
     type(TwoStreamIRWrk), pointer :: w
     logical :: deallocate_w
     
-    integer :: i, l
+    integer :: i, l, ll
+    real(dp) :: gam1, gam2
+    real(dp) :: lambda, cap_gam
     real(dp) :: wrk_real, Ssfc
     real(dp) :: b0n, b1n
     
@@ -249,10 +249,6 @@ contains
     endif
 
     ! Pointers to work memory
-    gam1 => w%gam1
-    gam2 => w%gam2
-    lambda => w%lambda
-    cap_gam => w%cap_gam
     e1 => w%e1
     e2 => w%e2
     e3 => w%e3
@@ -268,61 +264,56 @@ contains
     y1 => w%y1
     y2 => w%y2
 
-    ! Hemispheric mean Two-Stream coefficients (Table 1)
-    gam1 = 2.0_dp - w0*(1.0_dp + gt)
-    gam2 = w0*(1.0_dp - gt)
-    ! u1 = 0.5_dp (parameter)
-
-    ! lambda, and capital Gamma (Equations 21, 22)
-    lambda = sqrt(gam1**2.0_dp - gam2**2.0_dp)
-    cap_gam = gam2 / (gam1 + lambda)
-    ! cap_gam = (gam1-lambda)/gam2 ! this is the same as above
-    
-    ! e's (Equation 44)
     do i = 1,nz
-      wrk_real = exp(-lambda(i)*tau(i))
-      e1(i) = 1.0_dp + cap_gam(i)*wrk_real
-      e2(i) = 1.0_dp - cap_gam(i)*wrk_real
-      e3(i) = cap_gam(i) + wrk_real
-      e4(i) = cap_gam(i) - wrk_real
-    enddo
+      ! Hemispheric mean Two-Stream coefficients (Table 1)
+      gam1 = 2.0_dp - w0(i)*(1.0_dp + gt(i))
+      gam2 = w0(i)*(1.0_dp - gt(i))
+      ! u1 = 0.5_dp (parameter)
+
+      ! lambda, and capital Gamma (Equations 21, 22)
+      lambda = sqrt(gam1**2.0_dp - gam2**2.0_dp)
+      cap_gam = gam2 / (gam1 + lambda)
     
-    ! C+ and C- (Equation 27)
-    ! norm = 2.0_dp*pi*u1 (parameter)
-    do i=1,nz
+      ! e's (Equation 44)
+      wrk_real = exp(-lambda*tau(i))
+      e1(i) = 1.0_dp + cap_gam*wrk_real
+      e2(i) = 1.0_dp - cap_gam*wrk_real
+      e3(i) = cap_gam + wrk_real
+      e4(i) = cap_gam - wrk_real
+    
+      ! C+ and C- (Equation 27)
+      ! norm = 2.0_dp*pi*u1 (parameter)
       b0n = bplanck(i)
       b1n = (bplanck(i+1) - b0n)/tau(i)
       
-      cp0(i) = norm*(b0n + b1n*(1.0_dp/(gam1(i)+gam2(i))))
-      cpb(i) = norm*(b0n + b1n*(tau(i) + 1.0_dp/(gam1(i)+gam2(i))))
-      cm0(i) = norm*(b0n + b1n*(-1.0_dp/(gam1(i)+gam2(i))))
-      cmb(i) = norm*(b0n + b1n*(tau(i) - 1.0_dp/(gam1(i)+gam2(i))))
+      cp0(i) = norm*(b0n + b1n*(1.0_dp/(gam1+gam2)))
+      cpb(i) = norm*(b0n + b1n*(tau(i) + 1.0_dp/(gam1+gam2)))
+      cm0(i) = norm*(b0n + b1n*(-1.0_dp/(gam1+gam2)))
+      cmb(i) = norm*(b0n + b1n*(tau(i) - 1.0_dp/(gam1+gam2)))
 
     enddo
 
     Ssfc = emissivity*pi*bplanck(nz+1) ! ground
       
     ! Coefficients of tridiagonal linear system (Equations 39 - 43)
-    ! Odd coeficients (Equation 41)
     A(1) = 0.0_dp
     B(1) = e1(1)
     D(1) = -e2(1)
     E(1) = 0.0_dp - cm0(1) ! assumes no downward diffuse flux at top-of-atmosphere
     do i = 1, nz-1
+      ! Odd coeficients (Equation 41)
       l = 2*i + 1
       A(l) = e2(i)*e3(i) - e4(i)*e1(i)
       B(l) = e1(i)*e1(i+1) - e3(i)*e3(i+1)
       D(l) = e3(i)*e4(i+1) - e1(i)*e2(i+1)
       E(l) = e3(i)*(cp0(i+1) - cpb(i)) + e1(i)*(cmb(i) - cm0(i+1))
-    enddo
     
-    ! Even coefficients (Equation 42)
-    do i = 1, nz-1
-      l = 2*i
-      A(l) = e2(i+1)*e1(i) - e3(i)*e4(i+1)
-      B(l) = e2(i)*e2(i+1) - e4(i)*e4(i+1)
-      D(l) = e1(i+1)*e4(i+1) - e2(i+1)*e3(i+1)
-      E(l) = e2(i+1)*(cp0(i+1) - cpb(i)) - e4(i+1)*(cm0(i+1) - cmb(i))
+      ! Even coefficients (Equation 42)
+      ll = 2*i
+      A(ll) = e2(i+1)*e1(i) - e3(i)*e4(i+1)
+      B(ll) = e2(i)*e2(i+1) - e4(i)*e4(i+1)
+      D(ll) = e1(i+1)*e4(i+1) - e2(i+1)*e3(i+1)
+      E(ll) = e2(i+1)*(cp0(i+1) - cpb(i)) - e4(i+1)*(cm0(i+1) - cmb(i))
     enddo
     l = 2*nz
     A(l) = e1(nz) - Rsfc*e3(nz)
@@ -402,10 +393,6 @@ contains
     integer, intent(in) :: nz
     type(TwoStreamIRWrk) :: wrk
 
-    allocate(wrk%gam1(nz))
-    allocate(wrk%gam2(nz))
-    allocate(wrk%lambda(nz))
-    allocate(wrk%cap_gam(nz))
     allocate(wrk%e1(nz))
     allocate(wrk%e2(nz))
     allocate(wrk%e3(nz))

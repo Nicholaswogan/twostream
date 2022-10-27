@@ -1,6 +1,6 @@
 program benchmark_twostream
   use twostream, only: two_stream_solar, TwoStreamSolarWrk, dp
-  use test_utils, only: TwostreamTestData
+  use twostream_test_utils, only: TwostreamTestData
   implicit none
 
   call benchmark_twostream_solar_noalloc()

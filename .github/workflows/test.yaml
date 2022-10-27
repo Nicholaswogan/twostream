@@ -34,5 +34,5 @@ jobs:
     - name: test
       working-directory: ${{github.workspace}}/build
       run: |
-        ./test/test_twostream
         valgrind --error-exitcode=1 --leak-check=full ./test/test_twostream
+        ./test/test_twostream_reproduce

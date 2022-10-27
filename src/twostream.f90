@@ -9,8 +9,6 @@ module twostream
   public :: two_stream_ir, TwoStreamIRWrk
 
   type :: TwoStreamSolarWrk
-    real(dp), allocatable :: gam1(:), gam2(:), gam3(:), gam4(:)
-    real(dp), allocatable :: lambda(:), cap_gam(:)
     real(dp), allocatable :: e1(:), e2(:), e3(:), e4(:)
     real(dp), allocatable :: tauc(:), direct(:)
     real(dp), allocatable :: cp0(:), cpb(:), cm0(:), cmb(:)
@@ -48,8 +46,6 @@ contains
     type(TwoStreamSolarWrk), optional, target, intent(inout) :: wrk
     
     ! local
-    real(dp), pointer :: gam1(:), gam2(:), gam3(:), gam4(:)
-    real(dp), pointer :: lambda(:), cap_gam(:)
     real(dp), pointer :: e1(:), e2(:), e3(:), e4(:)
     real(dp), pointer :: tauc(:), direct(:)
     real(dp), pointer :: cp0(:), cpb(:), cm0(:), cmb(:)
@@ -59,7 +55,9 @@ contains
     type(TwoStreamSolarWrk), pointer :: w
     logical :: deallocate_w
     
-    integer :: i, l
+    integer :: i, l, ll
+    real(dp) :: gam1, gam2, gam3, gam4
+    real(dp) :: lambda, cap_gam
     real(dp) :: wrk_real, facp, facm, et0, etb, denom, Ssfc
     
     real(dp), parameter :: u1 = 1.0_dp/sqrt(3.0_dp) ! (Quadrature)
@@ -77,12 +75,6 @@ contains
     endif
 
     ! Pointers to work memory
-    gam1 => w%gam1
-    gam2 => w%gam2
-    gam3 => w%gam3
-    gam4 => w%gam4
-    lambda => w%lambda
-    cap_gam => w%cap_gam
     e1 => w%e1
     e2 => w%e2
     e3 => w%e3
@@ -100,76 +92,72 @@ contains
     y1 => w%y1
     y2 => w%y2
 
-    ! Quadrature Two-Stream coefficients (Table 1)
-    gam1 = sqrt(3.0_dp)*(2.0_dp-w0*(1+gt))/2.0_dp
-    gam2 = sqrt(3.0_dp)*w0*(1.0_dp-gt)/2.0_dp
-    gam3 = (1.0_dp-sqrt(3.0_dp)*gt*u0)/2.0_dp
-    gam4 = 1.0_dp - gam3
-    ! u1 = 1.0_dp/sqrt(3.0_dp) (parameter)
-
-    ! lambda, and capital Gamma (Equations 21, 22)
-    lambda = sqrt(gam1**2.0_dp - gam2**2.0_dp)
-    cap_gam = gam2 / (gam1 + lambda)
-    ! cap_gam = (gam1-lambda)/gam2 ! this is the same as above
-    
-    ! e's (Equation 44)
-    do i = 1,nz
-      wrk_real = exp(-lambda(i)*tau(i))
-      e1(i) = 1.0_dp + cap_gam(i)*wrk_real
-      e2(i) = 1.0_dp - cap_gam(i)*wrk_real
-      e3(i) = cap_gam(i) + wrk_real
-      e4(i) = cap_gam(i) - wrk_real
-    enddo
-    
     ! tauc - cumulative optical depth at the top of each layer
     tauc(1) = 0.0_dp
     do i = 2,nz+1
       tauc(i) = tauc(i-1) + tau(i-1)
     enddo
+
+    do i = 1,nz
+
+      ! Quadrature Two-Stream coefficients (Table 1)
+      gam1 = sqrt(3.0_dp)*(2.0_dp-w0(i)*(1+gt(i)))/2.0_dp
+      gam2 = sqrt(3.0_dp)*w0(i)*(1.0_dp-gt(i))/2.0_dp
+      gam3 = (1.0_dp-sqrt(3.0_dp)*gt(i)*u0)/2.0_dp
+      gam4 = 1.0_dp - gam3
+      ! u1 = 1.0_dp/sqrt(3.0_dp) (parameter)
+
+      ! lambda, and capital Gamma (Equations 21, 22)
+      lambda = sqrt(gam1**2.0_dp - gam2**2.0_dp)
+      cap_gam = gam2 / (gam1 + lambda)
     
-    ! C+ and C- (Equation 23, 24)
-    ! Fs_pi = 1.0_dp (parameter) 
-    ! We take the solar flux at the top of the atmosphere to be = 1
-    ! Note: Toon et al. 1989 defines Fs * pi = solar flux. So Fs = solar flux / pi
-    direct(1) = u0*Fs_pi
-    do i=1,nz
+      ! e's (Equation 44)
+      wrk_real = exp(-lambda*tau(i))
+      e1(i) = 1.0_dp + cap_gam*wrk_real
+      e2(i) = 1.0_dp - cap_gam*wrk_real
+      e3(i) = cap_gam + wrk_real
+      e4(i) = cap_gam - wrk_real
       
-      facp = w0(i)*Fs_pi*((gam1(i)-1.0_dp/u0)*gam3(i)+gam4(i)*gam2(i))
-      facm = w0(i)*Fs_pi*((gam1(i)+1.0_dp/u0)*gam4(i)+gam2(i)*gam3(i)) 
+      ! C+ and C- (Equation 23, 24)
+      ! Fs_pi = 1.0_dp (parameter) 
+      ! We take the solar flux at the top of the atmosphere to be = 1
+      ! Note: Toon et al. 1989 defines Fs * pi = solar flux. So Fs = solar flux / pi
+      facp = w0(i)*Fs_pi*((gam1-1.0_dp/u0)*gam3+gam4*gam2)
+      facm = w0(i)*Fs_pi*((gam1+1.0_dp/u0)*gam4+gam2*gam3) 
       et0 = exp(-tauc(i)/u0)
-      etb = et0*exp(-tau(i)/u0)!*pi
-      denom = lambda(i)**2.0_dp - 1.0_dp/(u0**2.0_dp)
+      etb = et0*exp(-tau(i)/u0)
+      denom = lambda**2.0_dp - 1.0_dp/(u0**2.0_dp)
 
       direct(i+1) = u0*Fs_pi*etb
       cp0(i) = et0*facp/denom
       cpb(i) = etb*facp/denom
       cm0(i) = et0*facm/denom
       cmb(i) = etb*facm/denom
+
     enddo
 
+    direct(1) = u0*Fs_pi
     Ssfc = Rsfc*direct(nz+1)
       
     ! Coefficients of tridiagonal linear system (Equations 39 - 43)
-    ! Odd coeficients (Equation 41)
     A(1) = 0.0_dp
     B(1) = e1(1)
     D(1) = -e2(1)
     E(1) = 0.0_dp - cm0(1) ! assumes no downward diffuse flux at top-of-atmosphere
     do i = 1, nz-1
+      ! Odd coeficients (Equation 41)
       l = 2*i + 1 ! is this right?
       A(l) = e2(i)*e3(i) - e4(i)*e1(i)
       B(l) = e1(i)*e1(i+1) - e3(i)*e3(i+1)
       D(l) = e3(i)*e4(i+1) - e1(i)*e2(i+1)
       E(l) = e3(i)*(cp0(i+1) - cpb(i)) + e1(i)*(cmb(i) - cm0(i+1))
-    enddo
-    
-    ! Even coefficients (Equation 42)
-    do i = 1, nz-1
-      l = 2*i ! is this right?
-      A(l) = e2(i+1)*e1(i) - e3(i)*e4(i+1)
-      B(l) = e2(i)*e2(i+1) - e4(i)*e4(i+1)
-      D(l) = e1(i+1)*e4(i+1) - e2(i+1)*e3(i+1)
-      E(l) = e2(i+1)*(cp0(i+1) - cpb(i)) - e4(i+1)*(cm0(i+1) - cmb(i))
+
+      ! Even coefficients (Equation 42)
+      ll = 2*i ! is this right?
+      A(ll) = e2(i+1)*e1(i) - e3(i)*e4(i+1)
+      B(ll) = e2(i)*e2(i+1) - e4(i)*e4(i+1)
+      D(ll) = e1(i+1)*e4(i+1) - e2(i+1)*e3(i+1)
+      E(ll) = e2(i+1)*(cp0(i+1) - cpb(i)) - e4(i+1)*(cm0(i+1) - cmb(i))
     enddo
     l = 2*nz
     A(l) = e1(nz) - Rsfc*e3(nz)
@@ -391,12 +379,6 @@ contains
     integer, intent(in) :: nz
     type(TwoStreamSolarWrk) :: wrk
 
-    allocate(wrk%gam1(nz))
-    allocate(wrk%gam2(nz))
-    allocate(wrk%gam3(nz))
-    allocate(wrk%gam4(nz))
-    allocate(wrk%lambda(nz))
-    allocate(wrk%cap_gam(nz))
     allocate(wrk%e1(nz))
     allocate(wrk%e2(nz))
     allocate(wrk%e3(nz))

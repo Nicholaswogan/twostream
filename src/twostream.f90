@@ -9,6 +9,7 @@ module twostream
   public :: two_stream_ir, TwoStreamIRWrk
 
   type :: TwoStreamSolarWrk
+    real(dp), allocatable :: tau(:), w0(:), gt(:)
     real(dp), allocatable :: e1(:), e2(:), e3(:), e4(:)
     real(dp), allocatable :: tauc(:), direct(:)
     real(dp), allocatable :: cp0(:), cpb(:), cm0(:), cmb(:)
@@ -33,12 +34,12 @@ module twostream
 
 contains
   
-  subroutine two_stream_solar(nz, tau, w0, gt, u0, Rsfc, &
+  subroutine two_stream_solar(nz, tau_in, w0_in, gt_in, u0, Rsfc, &
                               amean, surface_radiance, fup, fdn, wrk)
     integer, intent(in) :: nz
-    real(dp), intent(in) :: tau(nz)
-    real(dp), intent(in) :: w0(nz)
-    real(dp), intent(in) :: gt(nz)
+    real(dp), intent(in) :: tau_in(nz)
+    real(dp), intent(in) :: w0_in(nz)
+    real(dp), intent(in) :: gt_in(nz)
     real(dp), intent(in) :: u0, Rsfc
     real(dp), intent(out) :: amean(nz+1)
     real(dp), intent(out) :: surface_radiance
@@ -46,6 +47,7 @@ contains
     type(TwoStreamSolarWrk), optional, target, intent(inout) :: wrk
     
     ! local
+    real(dp), pointer :: tau(:), w0(:), gt(:)
     real(dp), pointer :: e1(:), e2(:), e3(:), e4(:)
     real(dp), pointer :: tauc(:), direct(:)
     real(dp), pointer :: cp0(:), cpb(:), cm0(:), cmb(:)
@@ -75,6 +77,9 @@ contains
     endif
 
     ! Pointers to work memory
+    tau => w%tau
+    w0 => w%w0
+    gt => w%gt
     e1 => w%e1
     e2 => w%e2
     e3 => w%e3
@@ -91,6 +96,13 @@ contains
     E => w%E
     y1 => w%y1
     y2 => w%y2
+
+    ! Delta-Eddington scaling (Joseph et al. 1976)
+    do i = 1,nz
+      tau(i) = tau_in(i)*(1.0_dp-w0_in(i)*gt_in(i)*gt_in(i))
+      w0(i) = w0_in(i)*(1.0_dp-gt_in(i)*gt_in(i))/(1.0_dp-w0_in(i)*gt_in(i)*gt_in(i))
+      gt(i) = gt_in(i)/(1.0_dp+gt_in(i))
+    enddo
 
     ! tauc - cumulative optical depth at the top of each layer
     tauc(1) = 0.0_dp
@@ -370,6 +382,9 @@ contains
     integer, intent(in) :: nz
     type(TwoStreamSolarWrk) :: wrk
 
+    allocate(wrk%tau(nz))
+    allocate(wrk%w0(nz))
+    allocate(wrk%gt(nz))
     allocate(wrk%e1(nz))
     allocate(wrk%e2(nz))
     allocate(wrk%e3(nz))
